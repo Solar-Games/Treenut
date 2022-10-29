@@ -2,9 +2,12 @@
 
 int main(int argc, char** argv)
 {
-	for (int i = 1; i < argc; i++)
+	if (strcmp(argv[argc - 2], "-r"))
 	{
-		compile_file(argv[i]);
+		compile_file_to_raw(argv[argc - 2], argv[argc - 1]);
 	}
-	scanf("%s");
+	else
+	{
+		compile_raw_file(argv[argc - 1]);
+	}
 }

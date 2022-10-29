@@ -1,0 +1,4 @@
+define a = "hello"
+define nice = 0;
+~| "Testing error printing."
+~/ First time using Treenut.
