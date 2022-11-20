@@ -2,12 +2,19 @@
 
 int main(int argc, char** argv)
 {
-	if (strcmp(argv[argc - 2], "-r"))
+	if (argc == 2)
 	{
-		compile_file_to_raw(argv[argc - 2], argv[argc - 1]);
+		compile_file_to_raw(argv[0], "a.out");
 	}
-	else
+	if (argc == 3)
 	{
-		compile_raw_file(argv[argc - 1]);
+		if (strcmp(argv[argc - 2], "-r"))
+		{
+			compile_file_to_raw(argv[argc - 2], argv[argc - 1]);
+		}
+		else
+		{
+			compile_raw_file(argv[argc - 1]);
+		}
 	}
 }

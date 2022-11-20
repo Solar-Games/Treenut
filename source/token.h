@@ -10,15 +10,15 @@
 #define _TREENUT_Token_H
 
 /* File characters */
-#define TOKEN_UNRECOGNIZED 	-2
-#define TOKEN_END_OF_FILE 	-1
-#define TOKEN_NEWLINE 		0
+#define TOKEN_UNRECOGNIZED 	-1
+#define TOKEN_END_OF_FILE 	1
+#define TOKEN_NEWLINE 		2
 
 /* Types */
-#define TOKEN_NAME			1
-#define TOKEN_NUMBER 		2
-#define TOKEN_DOT 			3
-#define TOKEN_STRING 		4
+#define TOKEN_NAME			3
+#define TOKEN_NUMBER 		4
+#define TOKEN_DOT 			5
+#define TOKEN_STRING 		6
 
 /* Keywords */
 #define TOKEN_DEFINE 		10
@@ -50,22 +50,26 @@
 #define TOKEN_PRINT			116
 #define TOKEN_ERROR			117
 
-int token_stop(short* tkns, char* str, int position, int tkn_pos, int success)
+int token_stop(char* tkns, char* str, int position, int tkn_pos, int success)
 {
-	return str[position] == '\0'
-			|| str[position] == '\n'
+	return tkns[tkn_pos] == TOKEN_END_OF_FILE
+			|| tkns[tkn_pos] == TOKEN_NEWLINE
 			|| tkns[tkn_pos] == TOKEN_COMMENT
 			|| tkns[tkn_pos] == TOKEN_UNRECOGNIZED
 			|| success;
 }
-int token_is_defined(short* tkns, int tkn_pos)
+int token_is_defined(char* tkns, int tkn_pos)
 {
 	int type = tkns[tkn_pos] == TOKEN_NUMBER || tkns[tkn_pos] == TOKEN_STRING;
 	return tkns[tkn_pos - 2] == TOKEN_NAME && tkns[tkn_pos - 1] == TOKEN_EQUALS && type;
 }
-int token_recieve_errors(short* tkns, int position, int tkn_pos)
+int token_legal_char_for_name(char c)
 {
-	if (tkns[position] == TOKEN_UNRECOGNIZED)
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+}
+int token_recieve_errors(char* tkns, int tkn_pos)
+{
+	if (tkns[tkn_pos] == TOKEN_UNRECOGNIZED)
 	{
 		return ERRORS_UNRECOGNIZABLE;
 	}
@@ -128,14 +132,38 @@ int token_has_name(char** k_mem, int k_m_pos, char* name)
 	}
 	return 0;
 }
-int token_tokenize(char** k_mem, void** v_mem, int *k_m_pos, int *v_m_pos, short* tkns, char* str)
+void token_add_to_pdata(char* p_data, char* ins, int a_defs)
+{
+	switch (a_defs)
+	{
+		case 0:
+			strcpy(p_data, ins);
+			break;
+			
+		default:
+			strcat(p_data, ins);
+			break;
+	}
+}
+int token_read_number(char* word)
+{
+	int value = 0;
+	int i = 0;
+	while (word[i] >= '0' && word[i] <= '9')
+	{
+		value *= 10;
+		value += (int) (word[i] - '0');
+		i++;
+	}
+	return value;
+}
+int token_old_parse(char** k_mem, void** v_mem, int *k_m_pos, int *v_m_pos, char* tkns, int *tkn_pos, char* str)
 {
 	int str_pos = 0;
-	int tkn_pos = 0;
-	
 	int success = 0;
 	
 	int prd_defined = 0;
+	int a_defs = 0;
 	char* printdata;
 	while (1)
 	{	
@@ -149,11 +177,11 @@ int token_tokenize(char** k_mem, void** v_mem, int *k_m_pos, int *v_m_pos, short
 		switch (str[str_pos])
 		{
 			case '\0':
-				tkns[tkn_pos] = TOKEN_END_OF_FILE;
+				tkns[tkn_pos[0]] = TOKEN_END_OF_FILE;
 				break;
 				
 			case '\n':
-				tkns[tkn_pos] = TOKEN_NEWLINE;
+				tkns[tkn_pos[0]] = TOKEN_NEWLINE;
 				break;
 				
 			case '0'...'9':
@@ -167,142 +195,146 @@ int token_tokenize(char** k_mem, void** v_mem, int *k_m_pos, int *v_m_pos, short
 					i++;
 				}
 				str_pos += i;
-				tkns[tkn_pos] = TOKEN_NUMBER;
+				tkns[tkn_pos[0]] = TOKEN_NUMBER;
 				str_val[i] = 0;
-				if (token_is_defined(tkns, tkn_pos))
+				if (token_is_defined(tkns, tkn_pos[0]))
 				{
 					v_mem[v_m_pos[0]] = malloc(sizeof(int));
 					memcpy(v_mem[v_m_pos[0]], &value, sizeof(int));
 					v_m_pos[0]++;
 				}
-				if (tkns[tkn_pos - 1] == TOKEN_ERROR || tkns[tkn_pos - 1] == TOKEN_PRINT)
+				if (tkns[tkn_pos[0] - 1] == TOKEN_ERROR || tkns[tkn_pos[0] - 1] == TOKEN_PRINT)
 				{
 					strcat(printdata, str_val);
 				}				
 				if (str[str_pos] == '+')
 				{
-					tkn_pos++;
-					tkns[tkn_pos] = TOKEN_PLUS;
+					tkn_pos[0]++;
+					tkns[tkn_pos[0]] = TOKEN_PLUS;
 				}
-				if (tkns[tkn_pos - 1] == TOKEN_NUMBER || tkns[tkn_pos - 1] == TOKEN_STRING || str[str_pos] == '"')
+				if (tkns[tkn_pos[0] - 1] == TOKEN_NUMBER || tkns[tkn_pos[0] - 1] == TOKEN_STRING || str[str_pos] == '"')
 				{
 					success = ERRORS_INCORRECT_SYNTAX;
 				}
-				if ((tkns[tkn_pos - 2] == TOKEN_NUMBER || tkns[tkn_pos - 2] == TOKEN_STRING) && tkns[tkn_pos - 1] == TOKEN_PLUS)
+				if ((tkns[tkn_pos[0] - 2] == TOKEN_NUMBER || tkns[tkn_pos[0] - 2] == TOKEN_STRING) && tkns[tkn_pos[0] - 1] == TOKEN_PLUS)
 				{
 					strcat(printdata, str_val);
 				}
 				break;
 				
 			case '.':
-				tkns[tkn_pos] = TOKEN_DOT;
+				tkns[tkn_pos[0]] = TOKEN_DOT;
 				break;
 		
 			case '{':
-				tkns[tkn_pos] = TOKEN_SBR_LEFT;
+				tkns[tkn_pos[0]] = TOKEN_SBR_LEFT;
 				break;
 				
 			case '}':
-				tkns[tkn_pos] = TOKEN_SBR_RIGHT;
+				tkns[tkn_pos[0]] = TOKEN_SBR_RIGHT;
 				break;
 				
 			case '(':
-				tkns[tkn_pos] = TOKEN_PARA_LEFT;
+				tkns[tkn_pos[0]] = TOKEN_PARA_LEFT;
 				break;
 				
 			case ')':
-				tkns[tkn_pos] = TOKEN_PARA_RIGHT;
+				tkns[tkn_pos[0]] = TOKEN_PARA_RIGHT;
 				break;
 				
 			case '[':
-				tkns[tkn_pos] = TOKEN_BR_LEFT;
+				tkns[tkn_pos[0]] = TOKEN_BR_LEFT;
 				break;
 				
 			case ']':
-				tkns[tkn_pos] = TOKEN_BR_RIGHT;
+				tkns[tkn_pos[0]] = TOKEN_BR_RIGHT;
 				break;
 				
 			case '<':
-				tkns[tkn_pos] = TOKEN_ARROW_LEFT;
+				tkns[tkn_pos[0]] = TOKEN_ARROW_LEFT;
 				break;
 				
 			case '>':
-				tkns[tkn_pos] = TOKEN_ARROW_RIGHT;
+				tkns[tkn_pos[0]] = TOKEN_ARROW_RIGHT;
 				break;
 				
 			case ';':
-				tkns[tkn_pos] = TOKEN_SEMICOLON;
+				tkns[tkn_pos[0]] = TOKEN_SEMICOLON;
 				break;
 				
 			case '=':
-				tkns[tkn_pos] = TOKEN_EQUALS;
+				tkns[tkn_pos[0]] = TOKEN_EQUALS;
 				break;
 			
 			case '+':
-				tkns[tkn_pos] = TOKEN_PLUS;
+				tkns[tkn_pos[0]] = TOKEN_PLUS;
 				break;
 			
 			case '-':
-				tkns[tkn_pos] = TOKEN_DASH;
+				tkns[tkn_pos[0]] = TOKEN_DASH;
 				break;
 		
 			case '*':
-				tkns[tkn_pos] = TOKEN_ASTERISK;
+				tkns[tkn_pos[0]] = TOKEN_ASTERISK;
 				break;
 			
 			case '/':
-				tkns[tkn_pos] = TOKEN_SLASH;
+				tkns[tkn_pos[0]] = TOKEN_SLASH;
 				break;
 				
 			case '^':
-				tkns[tkn_pos] = TOKEN_CARET;
+				tkns[tkn_pos[0]] = TOKEN_CARET;
 				break;
 				
 			case '~':
 				if (str[str_pos + 1] == '/')
 				{
-					tkns[tkn_pos] = TOKEN_COMMENT;
+					tkns[tkn_pos[0]] = TOKEN_COMMENT;
 				}
-				if (str[str_pos + 1] == '|')
+				if (!prd_defined)
 				{
-					printdata = malloc(2048);
-					prd_defined = 1;
-					tkns[tkn_pos] = TOKEN_PRINT;
-				}
-				if (str[str_pos + 1] == '!')
-				{
-					printdata = malloc(2048);
-					prd_defined = 1;
-					tkns[tkn_pos] = TOKEN_ERROR;
+					if (str[str_pos + 1] == '|')
+					{
+						printdata = malloc(2048);
+						prd_defined = 1;
+						tkns[tkn_pos[0]] = TOKEN_PRINT;
+					}
+					if (str[str_pos + 1] == '!')
+					{
+						printdata = malloc(2048);
+						prd_defined = 1;
+						tkns[tkn_pos[0]] = TOKEN_ERROR;
+					}
 				}
 				str_pos++;	
 				break;
 	
 			default:
-				tkns[tkn_pos] = TOKEN_UNRECOGNIZED;
+				tkns[tkn_pos[0]] = TOKEN_UNRECOGNIZED;
+				break;
 		}
 		
 		char* str_mem = malloc(2048);
 		int* str_args = token_is_string(str, str_mem, str_pos);
 		if (str_args[0])
 		{
-			tkns[tkn_pos] = TOKEN_STRING;
+			tkns[tkn_pos[0]] = TOKEN_STRING;
 			str_pos += str_args[1] + 1;
-			if (token_is_defined(tkns, tkn_pos))
+			if (token_is_defined(tkns, tkn_pos[0]))
 			{
 				v_mem[v_m_pos[0]] = malloc(2048);
 				strcpy(v_mem[v_m_pos[0]], str_mem);
 				v_m_pos[0]++;
 			}
-			if (tkns[tkn_pos - 1] == TOKEN_ERROR || tkns[tkn_pos - 1] == TOKEN_PRINT)
+			if (tkns[tkn_pos[0] - 1] == TOKEN_ERROR || tkns[tkn_pos[0] - 1] == TOKEN_PRINT)
 			{
 				strcat(printdata, str_mem);
 			}
-			if ((tkns[tkn_pos - 2] == TOKEN_NUMBER || tkns[tkn_pos - 2] == TOKEN_STRING) && tkns[tkn_pos - 1] == TOKEN_PLUS)
+			if ((tkns[tkn_pos[0] - 2] == TOKEN_NUMBER || tkns[tkn_pos[0] - 2] == TOKEN_STRING) && tkns[tkn_pos[0] - 1] == TOKEN_PLUS)
 			{
 				strcat(printdata, str_mem);
 			}
-			if (tkns[tkn_pos - 1] == TOKEN_NUMBER || tkns[tkn_pos - 1] == TOKEN_STRING)
+			if (tkns[tkn_pos[0] - 1] == TOKEN_NUMBER || tkns[tkn_pos[0] - 1] == TOKEN_STRING)
 			{
 				success = ERRORS_INCORRECT_SYNTAX;
 			}
@@ -310,98 +342,331 @@ int token_tokenize(char** k_mem, void** v_mem, int *k_m_pos, int *v_m_pos, short
 
 		if (token_equals_word(str, "define", str_pos))
 		{
-			tkns[tkn_pos] = TOKEN_DEFINE;
+			tkns[tkn_pos[0]] = TOKEN_DEFINE;
 			str_pos += 5;
 		}
-		
 		if (token_equals_word(str, "include", str_pos))
 		{
-			tkns[tkn_pos] = TOKEN_INCLUDE;
+			tkns[tkn_pos[0]] = TOKEN_INCLUDE;
 			str_pos += 6;
 		}
 		if (token_equals_word(str, "if", str_pos))
 		{
-			tkns[tkn_pos] = TOKEN_IF;
+			tkns[tkn_pos[0]] = TOKEN_IF;
 			str_pos += 1;
 		}
-		
 		if (token_equals_word(str, "while", str_pos))
 		{
-			tkns[tkn_pos] = TOKEN_WHILE;
+			tkns[tkn_pos[0]] = TOKEN_WHILE;
 			str_pos += 4;
 		}
-		
-		if (tkns[tkn_pos - 1] == TOKEN_DEFINE)
+		if (tkns[tkn_pos[0] - 1] == TOKEN_DEFINE)
 		{
 			int i = 0;
-			char* name = malloc(256);
 			while (!token_skip(str, str_pos + i))
 			{
-				name[i] = str[str_pos + i];
 				i++;
 			}
 			str_pos += i;
-			name[i] = 0;
-			int has = token_has_name(k_mem, k_m_pos[0], name);
-			if (!has)
-			{
-				k_mem[k_m_pos[0]] = malloc(256);
-				strcpy(k_mem[k_m_pos[0]], name);
-				k_m_pos[0]++;
-			}
-			else
-			{
-				success = ERRORS_ALREADY_EXISTS;
-			}
-			tkns[tkn_pos] = TOKEN_NAME;
-			free(name);
 		}
+		
+		printf("TOKEN: %d\n", tkns[tkn_pos[0]]);
 		
 		free(str_val);
 		free(str_mem);
 		free(str_args);
-		if (token_stop(tkns, str, str_pos, tkn_pos, success))
+		if (token_stop(tkns, str, str_pos, tkn_pos[0], success))
 		{
 			int i = 0;
 			while (1)
 			{
-				i++;
-				printf("TOKEN: %d\n", tkns[tkn_pos - i]);
-				if (tkns[tkn_pos - i] == TOKEN_NEWLINE)
+				if (tkns[tkn_pos[0] - i] == TOKEN_NEWLINE || tkn_pos[0] - i < 0)
 					break;
 				
 				int end = 0;
 				if (success == 0)
-					switch (tkns[tkn_pos - i])
+				{
+					switch (tkns[tkn_pos[0] - i])
 					{
 						case TOKEN_ERROR:
 							printf("{!}: %s\n", printdata);
 							success = ERRORS_RAISED_BY_USER;
 							end = 1;
+							free(printdata);
 							break;
 
 						case TOKEN_PRINT:
 							printf("{*}: %s\n", printdata);
 							end = 1;
-							break;
-
-						default:
+							free(printdata);
 							break;
 					}
-					
+				}
+				
 				if (end)
+				{
 					break;
+				}
+
+				i++;
 			}
 			if (success == 0)
-				success = token_recieve_errors(tkns, str_pos, tkn_pos);
+				success = token_recieve_errors(tkns, tkn_pos[0]);
 			
 			break;
 		}
 		str_pos++;
-		tkn_pos++;
+		tkn_pos[0]++;
 	}
-	free(printdata);
 	return success;
+}
+int token_tokenize(char* string, char* tokens, int* tkn_pos)
+{
+	int str_pos = 0;
+	int success = 0;
+	while (1)
+	{
+		if (token_skip(string, str_pos))
+		{
+			str_pos++;
+			continue;
+		}
+		
+		switch (string[str_pos])
+		{
+			case '\0':
+				tokens[tkn_pos[0]] = TOKEN_END_OF_FILE;
+				break;
+			case '\n':
+				tokens[tkn_pos[0]] = TOKEN_NEWLINE;
+				break;
+			case '0'...'9':
+				tokens[tkn_pos[0]] = TOKEN_NUMBER;
+				int i = 0;
+				while (string[str_pos + 1 + i] >= '0' && string[str_pos + 1 + i] <= '9')
+				{
+					i++;
+				}
+				str_pos += i;
+				break;
+			case '.':
+				tokens[tkn_pos[0]] = TOKEN_DOT;
+				break;
+			case '{':
+				tokens[tkn_pos[0]] = TOKEN_SBR_LEFT;
+				break;
+			case '}':
+				tokens[tkn_pos[0]] = TOKEN_SBR_RIGHT;
+				break;
+			case '(':
+				tokens[tkn_pos[0]] = TOKEN_PARA_LEFT;
+				break;
+			case ')':
+				tokens[tkn_pos[0]] = TOKEN_PARA_RIGHT;
+				break;
+			case '[':
+				tokens[tkn_pos[0]] = TOKEN_BR_LEFT;
+				break;
+			case ']':
+				tokens[tkn_pos[0]] = TOKEN_BR_RIGHT;
+				break;
+			case '<':
+				tokens[tkn_pos[0]] = TOKEN_ARROW_LEFT;
+				break;
+			case '>':
+				tokens[tkn_pos[0]] = TOKEN_ARROW_RIGHT;
+				break;
+			case ';':
+				tokens[tkn_pos[0]] = TOKEN_SEMICOLON;
+				break;
+			case '=':
+				tokens[tkn_pos[0]] = TOKEN_EQUALS;
+				break;
+			case '+':
+				tokens[tkn_pos[0]] = TOKEN_PLUS;
+				break;
+			case '-':
+				tokens[tkn_pos[0]] = TOKEN_DASH;
+				break;
+			case '*':
+				tokens[tkn_pos[0]] = TOKEN_ASTERISK;
+				break;
+			case '/':
+				tokens[tkn_pos[0]] = TOKEN_SLASH;
+				break;
+			case '~':
+				if (string[str_pos + 1] == '/')
+				{
+					tokens[tkn_pos[0]] = TOKEN_COMMENT;
+				}
+				if (string[str_pos + 1] == '!')
+				{
+					tokens[tkn_pos[0]] = TOKEN_ERROR;
+				}
+				if (string[str_pos + 1] == '|')
+				{
+					tokens[tkn_pos[0]] = TOKEN_PRINT;
+				}
+				str_pos++;
+				break;
+			default:
+				tokens[tkn_pos[0]] = TOKEN_UNRECOGNIZED;
+				break;
+		}
+		char* str_mem = malloc(2048);
+		int* str_args = token_is_string(string, str_mem, str_pos);
+		if (str_args[0])
+		{
+			tokens[tkn_pos[0]] = TOKEN_STRING;
+			str_pos += str_args[1] + 1;
+		}
+		if (token_equals_word(string, "define", str_pos))
+		{
+			tokens[tkn_pos[0]] = TOKEN_DEFINE;
+			str_pos += 5;
+		}
+		if (token_equals_word(string, "include", str_pos))
+		{
+			tokens[tkn_pos[0]] = TOKEN_INCLUDE;
+			str_pos += 6;
+		}
+		if (token_equals_word(string, "if", str_pos))
+		{
+			tokens[tkn_pos[0]] = TOKEN_IF;
+			str_pos += 1;
+		}
+		if (token_equals_word(string, "while", str_pos))
+		{
+			tokens[tkn_pos[0]] = TOKEN_WHILE;
+			str_pos += 4;
+		}
+		if (tokens[tkn_pos[0] - 1] == TOKEN_DEFINE)
+		{
+			int i = 0;
+			while (!token_skip(string, str_pos + i) && token_legal_char_for_name(string[str_pos + i]))
+			{
+				i++;
+				if (token_skip(string, str_pos + i) && !token_legal_char_for_name(string[str_pos + i]))
+				{
+					tokens[tkn_pos[0]] = TOKEN_NAME;
+				}
+			}
+			str_pos += i;
+		}
+		printf("Token: %d\n", tokens[tkn_pos[0]]);
+		free(str_mem);
+		free(str_args);
+		if (token_stop(tokens, string, str_pos, tkn_pos[0], success))
+		{
+			success = token_recieve_errors(tokens, tkn_pos[0]);
+			break;
+		}
+		str_pos++;
+		tkn_pos[0]++;
+	}
+	return success;
+}
+int token_execute(char* tokens, char** words, int* idents)
+{
+	int i = 0;
+	while (1)
+	{
+		int backtrack = 0;
+		int comment = 1;
+		while (tokens[i - backtrack] != TOKEN_COMMENT)
+		{
+			if (tokens[i - backtrack] == TOKEN_NEWLINE)
+			{
+				comment = 0;
+				break;
+			}
+			backtrack++;
+		}
+		if (tokens[i] == TOKEN_NEWLINE)
+		{
+			i++;
+			continue;
+		}
+		if (tokens[i - 2] == TOKEN_NUMBER)
+		{
+			if (tokens[i - 1] == TOKEN_PLUS)
+			{
+				if (tokens[i] == TOKEN_NUMBER)
+				{
+					if (tokens[i - 3] == TOKEN_PRINT || tokens[i - 3] == TOKEN_ERROR)
+					{
+						char* str = malloc(256);
+						strcpy(str, words[i - 2]);
+						strcat(str, words[i]);
+						printf("Concat: %s\n", str);
+						free(str);
+					}
+					else
+					{
+						int val = token_read_number(words[i - 2]) + token_read_number(words[i]);
+						printf("Math: %d\n", val);
+					}
+				}
+				if (tokens[i] == TOKEN_STRING)
+				{
+					char* str1 = malloc(256);
+					char* str2 = malloc(256);
+					strcpy(str1, words[i - 2]);
+					for (int j = 0; j < strlen(words[i]) - 2; j++)
+					{
+						str2[j] = words[i][j + 1];
+					}
+					str2[strlen(words[i]) - 1] = 0;
+					strcat(str1, str2);
+					printf("Concat: %s\n", str1);
+					free(str1);
+					free(str2);
+				}
+			}
+		}
+		if (tokens[i - 2] == TOKEN_STRING)
+		{
+			if (tokens[i - 1] == TOKEN_PLUS)
+			{
+				if (tokens[i] == TOKEN_STRING)
+				{
+					char* str1 = malloc(256);
+					for (int j = 0; j < strlen(words[i - 2]) - 2; j++)
+					{
+						str1[j] = words[i - 2][j + 1];
+					}
+					str1[strlen(words[i - 2]) - 1] = 0;
+					char* str2 = malloc(256);
+					for (int j = 0; j < strlen(words[i]) - 2; j++)
+					{
+						str2[j] = words[i][j + 1];
+					}
+					str2[strlen(words[i]) - 1] = 0;
+					strcat(str1, str2);
+					printf("Concat: %s\n", str1);
+					free(str1);
+					free(str2);
+				}
+				if (tokens[i] == TOKEN_NUMBER)
+				{
+					char* str1 = malloc(256);
+					for (int j = 0; j < strlen(words[i - 2]) - 2; j++)
+					{
+						str1[j] = words[i - 2][j + 1];
+					}
+					str1[strlen(words[i - 2]) - 1] = 0;
+					strcat(str1, words[i]);
+					printf("Concat: %s\n", str1);
+					free(str1);
+				}
+			}
+		}
+		if (tokens[i] == TOKEN_END_OF_FILE)
+		{
+			break;
+		}
+		i++;
+	}
 }
 int token_read(char** k_mem, void** v_mem, int *k_m_pos, int *v_m_pos, short* tkns)
 {

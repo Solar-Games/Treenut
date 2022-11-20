@@ -1,3 +1,5 @@
-define a = "asd"
-define b = 0
-~! 0 + 0 + "deli" + " i like cars"
+define a = "asd" + 24
+define b = 20045 + 1
+~| 0 + 0 + "deli" + " i like cars"
+~/ int this = 0 + 3;
+~/ while (this);
